@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Мастерская 47: Исправлено</title>
+    <style>
+        :root { --p1-color: #00ffcc; --p2-color: #ff00ff; --blue: #58a6ff; --plus: #238636; --minus: #da3633; }
+        body { margin: 0; background: #05070a; color: white; font-family: monospace; overflow: hidden; }
+
+        #start { position: fixed; inset: 0; background: #05070a; z-index: 1000; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .eye { width: 80px; height: 40px; border: 3px solid var(--blue); border-radius: 100% 0; transform: rotate(45deg); margin-bottom: 20px; box-shadow: 0 0 15px var(--blue); }
+
+        #game-window { width: 100vw; height: 40vh; background: #0d1117; display: flex; align-items: center; overflow: hidden; position: relative; border-bottom: 3px solid var(--blue); }
+        #track { display: flex; padding-left: 45vw; transition: transform 0.6s ease-out; align-items: center; position: relative; }
+        
+        .tile { 
+            min-width: 65px; height: 65px; background: #161b22; border: 2px solid #30363d; margin: 5px; border-radius: 8px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center; 
+            font-size: 1.1rem; color: var(--blue); font-weight: bold; flex-shrink: 0; 
+        }
+        .tile.plus { border-color: var(--plus); color: var(--plus); }
+        .tile.minus { border-color: var(--minus); color: var(--minus); }
+
+        .pawn { 
+            width: 40px; height: 40px; position: absolute; border-radius: 10px; border: 2px solid #fff;
+            display: flex; align-items: center; justify-content: center; font-weight: bold; z-index: 100;
+            transition: 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+        }
+        #p1-pawn { background: var(--p1-color); color: #000; top: -55px; box-shadow: 0 0 15px var(--p1-color); }
+        #p2-pawn { background: var(--p2-color); color: #fff; bottom: -55px; box-shadow: 0 0 15px var(--p2-color); }
+
+        #ui { height: 60vh; background: #1c2128; display: flex; flex-direction: column; align-items: center; justify-content: space-around; padding: 20px; box-sizing: border-box; }
+        .stats { display: flex; width: 100%; justify-content: space-around; font-weight: bold; }
+        .cube-wrap { width: 120px; height: 120px; background: #05070a; border: 5px solid var(--blue); border-radius: 20px; display: flex; align-items: center; justify-content: center; font-size: 4.5rem; }
+        button { background: #238636; border: none; padding: 20px; color: white; border-radius: 15px; font-weight: bold; font-size: 1.4rem; width: 100%; box-shadow: 0 5px 0 #1a6329; cursor: pointer; }
+        button:disabled { opacity: 0.5; box-shadow: none; }
+        input { padding: 12px; border-radius: 8px; margin: 5px; border: 2px solid var(--blue); background: #161b22; color: white; text-align: center; width: 80%; }
+    </style>
+</head>
+<body>
+
+    <div id="start">
+        <div class="eye"></div>
+        <h2 style="color:var(--blue)">МАСТЕРСКАЯ 47</h2>
+        <input type="text" id="p1Name" placeholder="ИГРОК 1" maxlength="10">
+        <input type="text" id="p2Name" placeholder="ИГРОК 2" maxlength="10">
+        <button onclick="ready()">ИГРАТЬ</button>
+    </div>
+
+    <div id="game-window">
+        <div id="track">
+            <div id="p1-pawn" class="pawn">1</div>
+            <div id="p2-pawn" class="pawn">2</div>
+        </div>
+    </div>
+
+    <div id="ui">
+        <div class="stats">
+             <div style="color:var(--p1-color)"><span id="n1">P1</span>: <span id="s1">0</span></div>
+             <div id="msg">ХОД: <span id="curName">?</span></div>
+             <div style="color:var(--p2-color)"><span id="n2">P2</span>: <span id="s2">0</span></div>
+        </div>
+        <div class="cube-wrap" id="cube">?</div>
+        <button id="rollBtn" onclick="move()">БРОСИТЬ КУБИК</button>
+    </div>
+
+    <script>
+        let pos = [0, 0];
+        let turn = 0;
+        let names = ["ИГРОК 1", "ИГРОК 2"];
+        let active = false;
+        let mods = {};
+        const step = 75;
+
+        function buildTrack() {
+            const track = document.getElementById('track');
+            // Очищаем только старые клетки, не трогая фигурки
+            const tiles = track.querySelectorAll('.tile');
+            tiles.forEach(t => t.remove());
+
+            for(let i=0; i<=100; i++) {
+                // Шанс выпадения мода
+                if (i > 2 && i < 98 && Math.random() < 0.2) {
+                    const m = [1, 4, -1, -4][Math.floor(Math.random()*4)];
+                    mods[i] = m;
+                }
+
+                const t = document.createElement('div');
+                t.className = 'tile';
+                if(mods[i]) {
+                    t.classList.add(mods[i] > 0 ? 'plus' : 'minus');
+                    t.innerHTML = `<span>${i}</span><small style="font-size:0.7rem">${mods[i]>0?'+':''}${mods[i]}</small>`;
+                } else {
+                    t.innerText = i;
+                }
+                track.appendChild(t);
+            }
+        }
+
+        function ready() {
+            let n1 = document.getElementById('p1Name').value;
+            let n2 = document.getElementById('p2Name').value;
+            if(n1) names[0] = n1.toUpperCase();
+            if(n2) names[1] = n2.toUpperCase();
+            
+            buildTrack();
+            document.getElementById('n1').innerText = names[0];
+            document.getElementById('n2').innerText = names[1];
+            document.getElementById('p1-pawn').innerText = names[0][0];
+            document.getElementById('p2-pawn').innerText = names[1][0];
+            document.getElementById('start').style.display = 'none';
+            active = true;
+            updateUI();
+        }
+
+        function updateUI() {
+            document.getElementById('curName').innerText = names[turn];
+            document.getElementById('cube').style.borderColor = turn === 0 ? 'var(--p1-color)' : 'var(--p2-color)';
+            document.getElementById('track').style.transform = `translateX(${-pos[turn] * step}px)`;
+            
+            document.getElementById('p1-pawn').style.left = (pos[0] * step + 12) + "px";
+            document.getElementById('p2-pawn').style.left = (pos[1] * step + 12) + "px";
+            
+            document.getElementById('s1').innerText = pos[0];
+            document.getElementById('s2').innerText = pos[1];
+        }
+
+        async function move() {
+            if(!active) return;
+            active = false;
+            document.getElementById('rollBtn').disabled = true;
+
+            let r = Math.floor(Math.random() * 6) + 1;
+            const cube = document.getElementById('cube');
+            
+            // Анимация
+            for(let i=0; i<10; i++) {
+                cube.innerText = Math.floor(Math.random() * 6) + 1;
+                await new Promise(res => setTimeout(res, 60));
+            }
+            cube.innerText = r;
+            await new Promise(res => setTimeout(res, 300));
+
+            // Движение по шагам
+            for(let i=0; i<r; i++) {
+                if(pos[turn] < 100) {
+                    pos[turn]++;
+                    updateUI();
+                    await new Promise(res => setTimeout(res, 150));
+                }
+            }
+
+            // Проверка мода
+            if(mods[pos[turn]]) {
+                await new Promise(res => setTimeout(res, 400));
+                pos[turn] += mods[pos[turn]];
+                if(pos[turn] < 0) pos[turn] = 0;
+                if(pos[turn] > 100) pos[turn] = 100;
+                updateUI();
+            }
+
+            if(pos[turn] >= 100) {
+                document.getElementById('msg').innerHTML = "ПОБЕДА " + names[turn];
+                return;
+            }
+
+            turn = turn === 0 ? 1 : 0;
+            updateUI();
+            document.getElementById('rollBtn').disabled = false;
+            active = true;
+        }
+    </script>
+</body>
+</html>
